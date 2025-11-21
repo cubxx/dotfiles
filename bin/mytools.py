@@ -1,38 +1,43 @@
-import argparse
-import inspect
-import json
 import logging
 import os
+import sqlite3
 import subprocess
 import sys
-import tempfile
-import urllib
-import urllib.request
-from contextlib import contextmanager
+import sysconfig
+from argparse import ArgumentParser
+from contextlib import closing, contextmanager
 from functools import cache
 from pathlib import Path
-from typing import Any, Callable, Literal, overload
+from typing import Any, Literal, final, overload, override
 
 import __main__
 
-BINPATH = Path.home() / ".local/bin"
-TMPPATH = Path(tempfile.gettempdir())
-LEVEL_COLORS = {
-    "DEBUG": "\033[96m",
-    "INFO": "\033[92m",
-    "WARNING": "\033[93m",
-    "ERROR": "\033[91m",
-    "CRITICAL": "\033[1;41m",
-}
+HOME = Path.home()
+BINPATH = Path(
+    sysconfig.get_path(
+        "scripts", scheme="nt_user" if sys.platform == "win32" else "posix_user"
+    )
+)
 
 
+# logger
+@final
 class ColoredFormatter(logging.Formatter):
+    COLORS = {
+        "DEBUG": "\033[96m",
+        "INFO": "\033[92m",
+        "WARNING": "\033[93m",
+        "ERROR": "\033[91m",
+        "CRITICAL": "\033[1;41m",
+    }
+
     def __init__(self):
         super().__init__("%(levelname)s %(message)s")
 
+    @override
     def format(self, record: logging.LogRecord):
         levelname = record.levelname
-        record.levelname = f"{LEVEL_COLORS.get(levelname, '')}{levelname}\033[0m"
+        record.levelname = f"{self.COLORS.get(levelname, '')}{levelname}\033[0m"
         result = super().format(record)
         record.levelname = levelname
         return result
@@ -44,6 +49,7 @@ log = logging.Logger("myscript", "INFO")
 log.addHandler(handler)
 
 
+# functions
 @cache
 def editor():
     editor = os.getenv("EDITOR") or os.getenv("VISUAL")
@@ -59,15 +65,21 @@ def cmd(command: str, stdout: Literal["sys"] = "sys") -> None: ...
 def cmd(command: str, stdout: str = "sys"):
     log.debug(f"command: {command}")
     capture_output = stdout == "capture"
-    p = subprocess.run(
-        command,
-        capture_output=capture_output,
-        shell=True,
-        text=True,
-        check=True,
-        stdout=None if capture_output else sys.stdout,
-        stderr=None if capture_output else sys.stderr,
-    )
+    try:
+        p = subprocess.run(
+            command,
+            capture_output=capture_output,
+            shell=True,
+            text=True,
+            check=True,
+            stdout=None if capture_output else sys.stdout,
+            stderr=None if capture_output else sys.stderr,
+        )
+    except subprocess.CalledProcessError as err:
+        log.error(f"CMD: {err.args[1]}")
+        _ = err.stdout and sys.stdout.write(err.stdout)
+        _ = err.stderr and sys.stderr.write(err.stderr)
+        sys.exit(err.returncode)
     return p.stdout if capture_output else None
 
 
@@ -77,56 +89,57 @@ def confirm(prompt: str, default: bool = True):
     return response == "y" if response else default
 
 
-def fetch(url: str, payload: Any | None = None):
-    log.debug(f"fetch {url}")
-    with urllib.request.urlopen(url, payload) as res:
-        data = json.loads(res.read().decode())
-    return data
-
-
-type Handler[T = Any] = Callable[[T], None]
-
-
 @contextmanager
-def cli(description: str, **conf: Any):
-    parser = argparse.ArgumentParser(description=description, **conf)
-    handlers: dict[str, Handler] = {}
+def sqlite(dbpath: str | Path):
+    with closing(sqlite3.connect(dbpath)) as con, con:
+        yield con
 
-    def arg(*flags: str, **conf: Any):
-        def warpper[T](fn: Handler[T]) -> Handler[T]:
-            arg_key = fn.__name__.strip("_")
-            arg_name = arg_key.replace("_", "-")
-            if len(flags):
-                if (
-                    not conf.get("action", "").startswith("store_")
-                    and "choices" not in conf
-                ):
-                    conf["metavar"] = next(iter(inspect.signature(fn).parameters))
-                parser.add_argument(f"--{arg_name}", *flags, **conf)  # option
-            else:
-                parser.add_argument(arg_name, **conf)  # positional
-            handlers[arg_key] = fn
-            return fn
 
-        return warpper
+# cli arguments
+def arg(*name_or_flags: str, **config: Any) -> Any:
+    config["name_or_flags"] = name_or_flags
+    return config
 
-    # add argument
-    @arg("-v", action="store_true", help="debug mode")
-    def verbose(val: object):  # type: ignore
-        if val is True:
+
+@final
+class cli:
+    class builtin_args:
+        verbose: bool = arg("-v", help="debug mode")
+        edit: bool = arg("-e", help="edit self")
+
+    def __init__(self, description: str, **config: Any):
+        config["description"] = description
+        self.parser = ArgumentParser(**config)
+
+    def add_argument(self, name: str, typ: type, config: dict[str, Any]):
+        name_or_flags: tuple[str, ...] = config.pop("name_or_flags", ())
+
+        if typ is bool:
+            config.setdefault("action", "store_true")
+        else:
+            config.setdefault("type", typ)
+
+        if len(name_or_flags) > 0 and name_or_flags[0].startswith("-"):
+            name_or_flags = (f"--{name}", *name_or_flags)  # named
+        else:
+            config.setdefault("dest", name)  # postional
+
+        _ = self.parser.add_argument(*name_or_flags, **config)
+
+    def add_arguments(self, cls: type):
+        for name, typ in cls.__annotations__.items():
+            self.add_argument(name, typ, getattr(cls, name, None) or {})
+
+    def __call__[T](self, cls: type[T]) -> T:
+        self.add_arguments(self.builtin_args)
+        self.add_arguments(cls)
+
+        opts = self.parser.parse_args()
+        if opts.verbose:
             log.setLevel("DEBUG")
-
-    @arg("-e", action="store_true", help="open editor to edit itself")
-    def edit(val: object):  # type: ignore
-        if val is True:
+        if opts.edit:
             cmd(f"{editor()} {__main__.__file__}")
+            sys.exit(0)
 
-    yield arg
-
-    # run
-    args = parser.parse_args()
-    for name, handler in handlers.items():
-        val = getattr(args, name)
-        if val is not None:
-            handler(val)
-    log.debug(args)
+        log.debug(opts)
+        return opts  # pyright: ignore[reportReturnType]  # ty: ignore[invalid-return-type]

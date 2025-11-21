@@ -1,60 +1,97 @@
 vim.g.mapleader = ' '
-vim.g.maplocalleader = ' '
+vim.g.maplocalleader = ','
 
-local opt = vim.opt
+vim.g.loaded_node_provider = 0
+vim.g.loaded_perl_provider = 0
+vim.g.loaded_python3_provider = 0
+vim.g.loaded_ruby_provider = 0
+
+vim.g.autochdir = true
 
 -- appearance
-opt.termguicolors = true
-opt.background = 'dark'
-opt.showmode = false
+vim.opt.termguicolors = true
+vim.opt.background = 'dark'
+vim.opt.showmode = false
 
--- editor
-opt.number = true
-opt.relativenumber = true
-opt.ruler = false
-opt.wrap = false
+-- window
+vim.opt.winborder = 'single'
+vim.opt.splitbelow = true
+vim.opt.splitright = true
 
-opt.cursorline = true
-opt.scrolloff = 4
-opt.sidescrolloff = 8
-opt.smoothscroll = true
+-- buffer
+vim.opt.number = true
+vim.opt.relativenumber = true
+vim.opt.ruler = false
+vim.opt.wrap = false
 
-opt.expandtab = true
-opt.shiftwidth = 2
-opt.smartindent = true
+vim.opt.cursorline = true
+vim.opt.scrolloff = 4
+vim.opt.sidescrolloff = 8
+vim.opt.smoothscroll = true
 
-opt.incsearch = true
+vim.opt.expandtab = true
+vim.opt.shiftwidth = 2
+vim.opt.smartindent = true
+
+vim.opt.incsearch = true
 
 -- folding
-opt.foldmethod = 'expr'
-opt.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
-opt.foldlevelstart = 3
-opt.foldminlines = 10
+vim.opt.foldmethod = 'expr'
+vim.opt.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+vim.opt.foldlevelstart = 3
+vim.opt.foldminlines = 10
 
+local lsp_foldexpr = 'v:lua.vim.lsp.foldexpr()'
 vim.api.nvim_create_autocmd('LspAttach', {
-  callback = function(args)
-    local client = vim.lsp.get_client_by_id(args.data.client_id)
+  callback = function(e)
+    local client = vim.lsp.get_client_by_id(e.data.client_id)
     if client == nil then
       error('not found client')
     end
-    if client:supports_method('textDocument/foldingRange') then
-      opt.foldexpr = 'v:lua.vim.lsp.foldexpr()'
+    if vim.wo.foldexpr ~= lsp_foldexpr and client:supports_method('textDocument/foldingRange') then
+      vim.wo.foldexpr = lsp_foldexpr
     end
   end,
 })
 
 -- lsp
-vim.lsp.config('*', {
-  offset_encoding = 'utf-8',
-})
-for filename, _ in vim.fs.dir(vim.fn.stdpath('config') .. '/lsp', { depth = 1 }) do
-  local basename = filename:gsub("%.lua$", "")
-  vim.lsp.enable(basename)
+
+--- rm log file
+local logfile = vim.lsp.log.get_filename()
+local logstat = vim.uv.fs_stat(logfile)
+if logstat and logstat.size >= 10485760 then -- 10 MB
+  vim.fs.rm(logfile, { force = true })
 end
 
+--- enable configs
+---@type  string[]
+local lsp_names = {}
+for filename, _ in vim.fs.dir(vim.fn.stdpath('config') .. '/lsp', { depth = 1 }) do
+  local name = vim.fn.fnamemodify(filename, ':t:r')
+
+  table.insert(lsp_names, name)
+  if not vim.lsp.config[name].manual then
+    vim.lsp.enable(name)
+  end
+end
+vim.keymap.set('n', 'grl', function()
+  vim.ui.select(lsp_names, { prompt = 'Toggle LSP clients:' }, function(choice)
+    if choice == nil then
+      return
+    end
+    local enable = not vim.lsp.is_enabled(choice)
+    vim.lsp.enable(choice, enable)
+    vim.schedule(function()
+      vim.notify(choice .. (enable and ' enabled' or ' disabled'), vim.log.levels.INFO)
+    end)
+  end)
+end, { desc = 'Toggle LSP' })
+
+--- default behavior
+vim.lsp.inlay_hint.enable()
 vim.diagnostic.config({
   virtual_lines = true,
-  signs = false,
+  float = { source = true },
   severity_sort = true,
+  signs = false,
 })
-

@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+import mytools as t
+from mytools import log
+
+
+@t.cli("system tray trigger")
+class opts:
+    app: str = t.arg("-a", help="application name")
+    label: str = t.arg("-l", default="", help="menu button label")
+
+
+def main():
+    # get service name
+    if opts.app:
+        service_name = t.cmd(
+            f"busctl --user list | grep StatusNotifierItem.*{opts.app} | awk '{{print $1}}'",
+            "capture",
+        ).strip()
+        if service_name == "":
+            raise Exception(f"Not Found: {opts.app}")
+    else:
+        service_list_str = t.cmd(
+            "busctl --user list | grep StatusNotifierItem", "capture"
+        ).strip()
+        service_list = service_list_str.split("\n")
+        service_str = service_list[
+            int(
+                input(
+                    f"{service_list_str}\nSelect a service (0-{len(service_list) - 1}): "
+                )
+            )
+        ]
+        service_name = service_str.split(" ", 1)[0]
+    log.info("Service: " + service_name)
+
+    # get menu id
+    menu_path = t.cmd(
+        f"busctl --user get-property {service_name} /StatusNotifierItem org.kde.StatusNotifierItem Menu",
+        "capture",
+    ).strip()[2:]
+    log.info("Menu path: " + menu_path)
+
+    import json
+
+    def find_menu_id_by_label(node, label: str) -> int | None:
+        if isinstance(node, dict) and node.get("type") == "(ia{sv}av)":
+            id, record, children = node["data"]
+            if "label" not in record:
+                return
+            if record["label"]["data"].startswith(label):
+                return id
+            return find_menu_id_by_label(children, label)
+        elif isinstance(node, list):
+            for subnode in node:
+                target = find_menu_id_by_label(subnode, label)
+                if target:
+                    return target
+
+    menu_obj_str = t.cmd(
+        f"busctl --user call --json=short -- {service_name} {menu_path} com.canonical.dbusmenu GetLayout iias 0 -1 0",
+        "capture",
+    )
+    # t.cmd(f"echo '{menu_obj_str}' > /tmp/tray_menu.json")
+    menu_obj = json.loads(menu_obj_str)["data"][1][2]
+    menu_id = find_menu_id_by_label(menu_obj, opts.label)
+    if menu_id is None:
+        log.error("Not Found: " + opts.label)
+        return
+    log.info("Menu button id: %s", menu_id)
+
+    # emit event
+    t.cmd(
+        f"busctl --user call -- {service_name} {menu_path} com.canonical.dbusmenu Event isvu {menu_id} clicked s '' 0"
+    )
+
+
+main()

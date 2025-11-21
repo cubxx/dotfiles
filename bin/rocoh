@@ -1,0 +1,351 @@
+#!/usr/bin/env python
+import time
+
+import mytools as t
+
+
+@t.cli("roco helper")
+class opts:
+    list: bool = t.arg("-l", help="list all actions")
+    action: str = t.arg("-a")
+    hotkeys: bool = t.arg("-k", help="快捷键")
+
+
+if not hasattr(opts, "edit"):
+    import os
+    import sys
+
+    if os.geteuid() != 0:
+        os.execvp("sudo", ["sudo", sys.executable] + sys.argv)
+
+
+XY = {
+    "MAIN": {
+        "F1": (1652, 70),
+        "F2": (1761, 74),
+        "F3": (1890, 76),
+        "F4": (2000, 72),
+        "J": (2100, 75),
+        "P": (2200, 76),
+        "PET.6": (214, 772),
+        "PANEL": (201, 67),
+        "F": (1589, 509),
+        "BTN.C": (1911, 810),
+    },
+    "PANEL": {
+        "MAP": (1549, 210),
+        "SKIN": (352, 341),
+        "STAR": (1258, 741),
+    },
+    "F3": {
+        "BTN.2": (188, 328),
+        "BTN.2.TYPE.2": (763, 61),
+        "BTN.2.TYPE.3": (971, 63),
+        "BTN.2.OK.1": (1981, 335),
+        "BTN.2.OK.2": (2015, 598),
+    },
+    "MAP": {
+        "OK": (1761, 1000),
+        "HOUSE": (2216, 988),
+        "HOUSE.INSIDE": (1737, 982),
+        "HOUSE.PLANT": (2116, 984),
+        "HOT": (186, 292),
+        "HOT.SALE": (471, 379),
+    },
+    "FIGHT": {
+        "SKILL.1": (426, 309),
+        "SKILL.2": (373, 513),
+        "SKILL.3": (409, 695),
+        "SKILL.4": (488, 857),
+        "CAST": (1516, 487),
+        "BALL.1": (388, 268),
+    },
+    "PET": {
+        "EGG": (513, 993),
+        "EGG.OK": (2063, 1026),
+        "EGG.ITEM.1": (1763, 183),
+        "EGG.BOX.1": (331, 301),
+        "EGG.BOX.2": (487, 564),
+        "EGG.BOX.3": (405, 768),
+    },
+    "CHALLENGE": {
+        "START": (1907, 999),
+        "OK": (1390, 927),
+        "SKIP": (241, 73),
+    },
+    "SKIN": {
+        "BTN.2": (193, 339),
+        "ITEM.1": (596, 695),
+        "ITEM.2": (965, 715),
+        "ITEM.3": (1328, 723),
+        "ITEM.4": (1712, 705),
+        "ITEM.5": (2060, 695),
+    },
+}
+
+
+def tap(coord: tuple[int, int], delay=1.5):
+    xy = " ".join(map(str, coord))
+    t.cmd(f"adb shell input tap {xy}")
+    time.sleep(delay)
+
+
+class actions:
+    def daily():
+        # actions.hatch()
+        actions.skin()
+
+    def skin():
+        tap(XY["MAIN"]["PANEL"], 2)
+        # tap(XY["PANEL"]["STAR"])
+        tap(XY["PANEL"]["SKIN"])
+        tap(XY["SKIN"]["BTN.2"])
+        for i in range(5):
+            tap(XY["SKIN"][f"ITEM.{i + 1}"], 0.2)
+
+    def hatch():
+        tap(XY["MAIN"]["P"])
+        tap(XY["PET"]["EGG"], 2)
+        for _ in range(3):
+            tap(XY["PET"]["EGG.OK"])
+            tap(XY["PET"]["EGG.ITEM.1"])
+            tap(XY["PET"]["EGG.OK"], 8)
+            tap(XY["PET"]["EGG.OK"])
+
+    def plant():
+        tap(XY["MAIN"]["PANEL"], 2)
+        tap(XY["PANEL"]["MAP"])
+        tap(XY["MAP"]["HOUSE"])
+        tap(XY["MAP"]["HOUSE.PLANT"], 8)
+        tap(XY["MAIN"]["BTN.C"])
+
+    def challenge():
+        tap(XY["MAIN"]["F"])
+        tap(XY["CHALLENGE"]["OK"])
+        tap(XY["CHALLENGE"]["OK"], 12)
+        tap(XY["FIGHT"]["SKILL.1"], 12)
+        tap(XY["FIGHT"]["SKILL.2"], 13)
+        tap(XY["FIGHT"]["SKILL.1"], 13)
+        tap(XY["FIGHT"]["SKILL.1"], 12)
+        tap(XY["FIGHT"]["BALL.1"])
+        tap(XY["FIGHT"]["CAST"], 12)
+        tap(XY["MAIN"]["F"])
+        tap(XY["MAIN"]["F"])
+
+    def legend():
+        tap(XY["MAIN"]["F3"])
+        tap(XY["F3"]["BTN.2"])
+        tap(XY["F3"]["BTN.2.TYPE.3"])
+        tap(XY["F3"]["BTN.2.OK.2"])
+        tap(XY["MAP"]["OK"], 8)
+        tap(XY["MAIN"]["PET.6"])
+        tap(XY["MAIN"]["F"])
+        tap(XY["CHALLENGE"]["START"])
+        tap(XY["CHALLENGE"]["OK"], 5)
+        tap(XY["CHALLENGE"]["SKIP"])
+
+
+def main():
+    if opts.list:
+        print("\n".join(k for k in vars(actions) if not k.startswith("__")))
+        return
+    if opts.action:
+        getattr(actions, opts.action)()
+        return
+
+
+main()
+
+# if s.hotkeys:
+#     import asyncio
+#     from collections.abc import Callable
+#     from functools import wraps
+#     from typing import Any
+#
+#     import evdev
+#     from evdev import InputEvent, ecodes
+#
+#     def deco(devpath: str):
+#         device = evdev.InputDevice(devpath)
+#
+#         def wrapper(cls: type):
+#             ins = cls()
+#             listeners: dict[int, Callable[[evdev.InputEvent], None]] = {}
+#             for attr in dir(ins):
+#                 if attr.startswith("on_"):
+#                     key = attr[3:]
+#                     code = getattr(ecodes, key)
+#                     listeners[code] = getattr(ins, attr)
+#
+#             async def listen():
+#                 async for evt in device.async_read_lo):
+#                     if evt.type != ecodes.EV_KEY:
+#                         continue
+#                     listener = listeners.get(evt.code)
+#                     if listener:
+#                         listener(evt)
+#
+#             return listen()
+#
+#         return wrapper
+#
+#     def cmd(x: str) -> None:
+#         return t.cmd("adb shell " + x)
+#
+#     Action = Callable[[Any, evdev.InputEvent], None] | str | None
+#
+#     def tap(down: Action = None, up: Action = None):
+#         def execute(action: Action, *args):
+#             if action is None:
+#                 return
+#             if isinstance(action, str):
+#                 cmd(action)
+#             else:
+#                 action(*args)
+#
+#         def wrapper(cb: Callable[[Any, evdev.InputEvent], None]):
+#             key = cb.__name__[7:]
+#
+#             @wraps(cb)
+#             def wrapped(self, e: InputEvent):
+#                 if e.value == 1 and key not in self.keys:
+#                     self.keys.add(key)
+#                     execute(down, self, e)
+#                 elif e.value == 0 and key in self.keys:
+#                     self.keys.remove(key)
+#                     execute(up, self, e)
+#
+#             return wrapped
+#
+#         return wrapper
+#
+#     move_deco = tap(
+#         lambda self, _: self.down(),
+#         lambda self, _: self.up(),
+#     )
+#
+#     @deco("/dev/input/event7")
+#     class kb:
+#         MOVE_KEYS = {"W", "A", "S", "D"}
+#         keys = set[str]()
+#         xy = ""
+#
+#         # move
+#         def down(self):
+#             x, y = 485, 755
+#             if "A" in self.keys:
+#                 x = 345
+#             elif "D" in self.keys:
+#                 x = 635
+#             if "W" in self.keys:
+#                 y = 610
+#             elif "S" in self.keys:
+#                 y = 900
+#             new_xy = f"{x} {y}"
+#             if new_xy == self.xy:
+#                 return
+#             if len(self.xy):
+#                 cmd("input motionevent UP " + self.xy)
+#             self.xy = new_xy
+#             cmd("input motionevent DOWN " + self.xy)
+#
+#         def up(self):
+#             if self.keys & self.MOVE_KEYS:
+#                 self.down()
+#             elif len(self.xy):
+#                 cmd("input motionevent UP " + self.xy)
+#                 self.xy = ""
+#
+#         @move_deco
+#         def on_KEY_W(self, _): ...
+#         @move_deco
+#         def on_KEY_S(self, _): ...
+#         @move_deco
+#         def on_KEY_A(self, _): ...
+#         @move_deco
+#         def on_KEY_D(self, _): ...
+#
+#         # left-top
+#         @tap(up="input tap 205 82")
+#         def on_KEY_ESC(self, _): ...
+#         @tap(up="input tap 209 198")
+#         def on_KEY_1(self, _): ...
+#         @tap(up="input tap 209 327")
+#         def on_KEY_2(self, _): ...
+#         @tap(up="input tap 209 442")
+#         def on_KEY_3(self, _): ...
+#         @tap(up="input tap 209 555")
+#         def on_KEY_4(self, _): ...
+#         @tap(up="input tap 209 679")
+#         def on_KEY_5(self, _): ...
+#         @tap(up="input tap 209 794")
+#         def on_KEY_6(self, _): ...
+#
+#         # right-top
+#         @tap(up="input tap 1652 60")
+#         def on_KEY_F1(self, _): ...
+#         @tap(up="input tap 1773 60")
+#         def on_KEY_F2(self, _): ...
+#         @tap(up="input tap 1888 60")
+#         def on_KEY_F3(self, _): ...
+#         @tap(up="input tap 1992 60")
+#         def on_KEY_F4(self, _): ...
+#         @tap(up="input tap 2100 60")
+#         def on_KEY_F5(self, _): ...
+#         @tap(up="input tap 2222 60")
+#         def on_KEY_F6(self, _): ...
+#
+#         # right-dottom
+#         @tap(up="input tap 2098 710")
+#         def on_KEY_SPACE(self, _):
+#             """RT"""
+#
+#         @tap(up="input tap 2098 918")
+#         def on_KEY_X(self, _):
+#             """RB"""
+#
+#         @tap(up="input tap 1722 930")
+#         def on_KEY_R(self, _):
+#             """LB"""
+#
+#         # left-bottom
+#         @tap(up="input tap 201 993")
+#         def on_KEY_ENTER(self, _):
+#             """消息"""
+#
+#         @tap(up="input tap 314 993")
+#         def on_KEY_I(self, _):
+#             """相机"""
+#
+#         @tap(up="input tap 409 993")
+#         def on_KEY_K(self, _):
+#             """服装"""
+#
+#         @tap("input motionevent DOWN 677 966", "input motionevent UP 677 966")
+#         def on_KEY_E(self, _):
+#             """咕噜球"""
+#
+#         @tap("input motionevent DOWN 814 966", "input motionevent UP 814 966")
+#         def on_KEY_Q(self, _):
+#             """星星魔法"""
+#
+#         # others
+#         @tap(up="input tap 1602 512")
+#         def on_KEY_F(self, _):
+#             """物体交互"""
+#
+#         @tap(up="input swipe 1500 60 1500 512 1")
+#         def on_KEY_M(self, _):
+#             """地图"""
+#
+#         # fight
+#         @tap(up="input tap 453 324")
+#         def on_KEY_7(self, _): ...
+#         @tap(up="input tap 412 502")
+#         def on_KEY_8(self, _): ...
+#         @tap(up="input tap 435 696")
+#         def on_KEY_9(self, _): ...
+#         @tap(up="input tap 508 858")
+#         def on_KEY_0(self, _): ...
+#
+#     asyncio.run(kb)

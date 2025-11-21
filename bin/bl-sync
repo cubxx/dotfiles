@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "-e" ]]; then
+  [ -f ~/.selected_editor ] && . ~/.selected_editor
+  "${2:-${EDITOR:-${VISUAL:-$SELECTED_EDITOR}}}" "$0"
+  exit 0
+fi
+#============================#
+ADAPTER_MAC=E4:5E:37:07:36:B7
+DEVICE_MAC=05:A1:B6:C1:8C:EC
+
+sudo mount /dev/nvme0n1p4 /mnt/win
+cd /mnt/win/Windows/System32/config
+DEVICE_MAC_lower=$(echo $DEVICE_MAC | tr -d ':' | tr 'A-Z' 'a-z')
+WIN_KEY=$(sudo reged -x SYSTEM "HKEY_LOCAL_MACHINE\SYSTEM" "ControlSet001\Services\BTHPORT\Parameters\Keys" /dev/stdout |
+  rg "$DEVICE_MAC_lower.*hex:([0-9a-f,]+)" -r '$1' -o |
+  tr -d ',')
+echo "WIN_KEY $WIN_KEY"
+
+sudo sed -i "s/^Key=.*/Key=$(echo $WIN_KEY | tr 'A-Z' 'a-z')" /var/lib/bluetooth/$ADAPTER_MAC/$DEVICE_MAC/info
+sudo umount /mnt/win

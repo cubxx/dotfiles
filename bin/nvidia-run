@@ -6,5 +6,7 @@ if [[ "${1:-}" == "-e" ]]; then
   exit 0
 fi
 #============================#
-
-gsettings reset org.gnome.shell app-picker-layout
+export __NV_PRIME_RENDER_OFFLOAD=1
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+export __VK_LAYER_NV_optimus=NVIDIA_only
+"$@"

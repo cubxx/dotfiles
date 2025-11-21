@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "-e" ]]; then
+  [ -f ~/.selected_editor ] && . ~/.selected_editor
+  "${2:-${EDITOR:-${VISUAL:-$SELECTED_EDITOR}}}" "$0"
+  exit 0
+fi
+#============================#
+NAME="cmds-$(date +%s)"
+
+tmux new-session -d -s "$NAME"
+tmux send-keys -t "$NAME" "$1" C-m
+shift
+
+for cmd in "$@"; do
+  tmux split-window -h -t "$NAME"
+  tmux send-keys -t "$NAME" "$cmd" C-m
+done
+
+if [ $# -ge 2 ]; then
+  tmux select-layout -t "$NAME" tiled
+fi
+tmux attach-session -t "$NAME"

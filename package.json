@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.4",
+    "@t1ckbase/vscode-langservers-extracted": "^2.0.3",
+    "@vtsls/language-server": "^0.3.0",
+    "basedpyright": "^1.39.10",
+    "oxlint": "^1.81.0",
+    "prettier": "^3.9.6",
+    "skills": "^1.5.23",
+    "typescript": "^7.0.2"
+  }
+}
