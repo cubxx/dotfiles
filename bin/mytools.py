@@ -1,21 +1,22 @@
-import argparse
-import inspect
 import json
 import logging
 import os
+import sqlite3
 import subprocess
 import sys
 import tempfile
 import urllib
 import urllib.request
-from contextlib import contextmanager
+from argparse import ArgumentParser
+from contextlib import closing, contextmanager
 from functools import cache
 from pathlib import Path
-from typing import Any, Callable, Literal, overload
+from typing import Any, Literal, overload
 
 import __main__
 
-BINPATH = Path.home() / ".local/bin"
+HOME = Path.home()
+BINPATH = Path(__file__).parent
 TMPPATH = Path(tempfile.gettempdir())
 LEVEL_COLORS = {
     "DEBUG": "\033[96m",
@@ -26,6 +27,7 @@ LEVEL_COLORS = {
 }
 
 
+# logger
 class ColoredFormatter(logging.Formatter):
     def __init__(self):
         super().__init__("%(levelname)s %(message)s")
@@ -44,6 +46,7 @@ log = logging.Logger("myscript", "INFO")
 log.addHandler(handler)
 
 
+# functions
 @cache
 def editor():
     editor = os.getenv("EDITOR") or os.getenv("VISUAL")
@@ -84,49 +87,58 @@ def fetch(url: str, payload: Any | None = None):
     return data
 
 
-type Handler[T = Any] = Callable[[T], None]
-
-
 @contextmanager
-def cli(description: str, **conf: Any):
-    parser = argparse.ArgumentParser(description=description, **conf)
-    handlers: dict[str, Handler] = {}
+def sqlite(dbpath: str | Path):
+    with closing(sqlite3.connect(dbpath)) as con:
+        with con:
+            yield con
 
-    def arg(*flags: str, **conf: Any):
-        def warpper[T](fn: Handler[T]) -> Handler[T]:
-            arg_key = fn.__name__.strip("_")
-            arg_name = arg_key.replace("_", "-")
-            if len(flags):
-                if (
-                    not conf.get("action", "").startswith("store_")
-                    and "choices" not in conf
-                ):
-                    conf["metavar"] = next(iter(inspect.signature(fn).parameters))
-                parser.add_argument(f"--{arg_name}", *flags, **conf)  # option
-            else:
-                parser.add_argument(arg_name, **conf)  # positional
-            handlers[arg_key] = fn
-            return fn
 
-        return warpper
+# cli arguments
+def arg(*name_or_flags: str, **config: Any) -> Any:
+    config["name_or_flags"] = name_or_flags
+    return config  # type: ignore
 
-    # add argument
-    @arg("-v", action="store_true", help="debug mode")
-    def verbose(val: object):  # type: ignore
-        if val is True:
+
+class cli:
+    class args:
+        verbose: bool = arg("-v", help="debug mode")
+        edit: bool = arg("-e", help="edit self")
+
+    def __init__(self, description: str, **config: Any):
+        config["description"] = description
+        self.parser = ArgumentParser(**config)
+
+    def add_argument(self, name: str, typ: type, config: dict[str, Any]):
+        name_or_flags: tuple[str, ...] = config.pop("name_or_flags", ())
+
+        if typ is bool:
+            config.setdefault("action", "store_true")
+        else:
+            config.setdefault("type", typ)
+
+        if not (
+            len(name_or_flags) > 0 and name_or_flags[0].startswith("-")
+        ):  # postional
+            config.setdefault("dest", name)
+
+        self.parser.add_argument(f"--{name}", *name_or_flags, **config)
+
+    def __call__[T](self, cls: type[T]) -> T:
+        # add
+        for name, typ in {
+            **cli.args.__annotations__,
+            **cls.__annotations__,
+        }.items():
+            self.add_argument(name, typ, getattr(cls, name, None) or {})
+
+        # parse
+        opts = self.parser.parse_args()
+
+        if opts.verbose:
             log.setLevel("DEBUG")
-
-    @arg("-e", action="store_true", help="open editor to edit itself")
-    def edit(val: object):  # type: ignore
-        if val is True:
+        if opts.edit:
             cmd(f"{editor()} {__main__.__file__}")
 
-    yield arg
-
-    # run
-    args = parser.parse_args()
-    for name, handler in handlers.items():
-        val = getattr(args, name)
-        if val is not None:
-            handler(val)
-    log.debug(args)
+        log.debug(opts)
+        return opts  # type: ignore

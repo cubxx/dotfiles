@@ -41,8 +41,8 @@ return {
           -- Depending on the usage, you might want to add additional paths
           -- here.
           '${3rd}/luv/library',
-          '${3rd}/busted/library'
-        }
+          '${3rd}/busted/library',
+        },
         -- Or pull in all of 'runtimepath'.
         -- NOTE: this is a lot slower and will cause issues when working on
         -- your own configuration.
@@ -50,27 +50,14 @@ return {
         -- library = {
         --   vim.api.nvim_get_runtime_file('', true),
         -- }
-      }
+      },
     })
   end,
   settings = {
+    -- https://luals.github.io/wiki/settings/
     Lua = {
-      workspace = {
-        checkThirdParty = false,
-      },
-      codeLens = {
-        enable = true,
-      },
-      completion = {
-        enable = true,
-        callSnippet = "Replace",
-      },
-      doc = {
-        privateName = { "^_" },
-      },
-      hint = {
-        enable = true
-      },
-    }
-  }
+      doc = { privateName = { '^_' } },
+      hint = { enable = true },
+    },
+  },
 }

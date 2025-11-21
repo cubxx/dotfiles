@@ -28,10 +28,15 @@ def decompress(source: Path, target: Path):
             raise ValueError(f"unsupported file type: {source.name}")
 
 
-with t.cli("system font manager") as arg:
+@t.cli("system font manager")
+class opts:
+    install: str = t.arg("-i")
+    delete: str = t.arg("-d")
 
-    @arg("-i")
-    def install(url: str):
+
+def main():
+    if opts.install:
+        url = opts.install
         urlpath = Path(url)
         suffix = "".join(urlpath.suffixes)
         fontname = urlpath.name.removesuffix(suffix)
@@ -50,9 +55,10 @@ with t.cli("system font manager") as arg:
 
         t.cmd("fc-cache -f")
         tmp_filepath.unlink(missing_ok=True)
+        return
 
-    @arg("-d")
-    def delete(fontname: str):
+    if opts.delete:
+        fontname = opts.delete
         dirpath = SYSFONT_DIRPATH / fontname
         isFound = dirpath.is_dir()
         if isFound:

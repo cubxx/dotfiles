@@ -37,6 +37,9 @@ PACKAGES = {
         re.compile(r"linux-x86_64\.AppImage$"),
         True,
     ),  # dep: libfuse2t64
+    "tinymist": Package(
+        "Myriad-Dreamin/tinymist", "tinymist-x86_64-unnown-linux-gnu.tar.gz"
+    ),
 }
 
 
@@ -64,66 +67,71 @@ def fetch_release(pkg: Package):
     raise ValueError(f"{pkg.file} not found")
 
 
-with t.cli(description="my package manager") as arg:
+def install_pkg(name: str):
+    pkg = PACKAGES[name]
+    current_version = (
+        t.cmd(f"dpkg -l | grep '^ii  {name}' | awk '{{print $3}}'", "capture")
+        .strip()
+        .lower()
+    )
+    rls = fetch_release(pkg)
+    if current_version == rls.version:
+        log.info(f"{name} is already up to date ({current_version})")
+        return
 
-    @arg("-l", action="store_true", help="show packages")
-    def list(val: object):
-        if val is True:
-            print("\n".join(PACKAGES.keys()))
+    # download
+    log.info("changelog: " + "\n".join(rls.changelog.splitlines()[:20]))
+    if not t.confirm(f"install {name} {current_version} -> {rls.version}"):
+        return
+    tmp_filepath = t.TMPPATH / (f"{name}-{rls.version}")
+    t.cmd(f"wget -O '{tmp_filepath}' '{rls.url}'")
 
-    @arg("-i")
-    def install(package_name: str):
-        pkg = PACKAGES[package_name]
-        current_version = (
-            t.cmd(
-                f"dpkg -l | grep '^ii  {package_name}' | awk '{{print $3}}'", "capture"
-            )
-            .strip()
-            .lower()
-        )
-        rls = fetch_release(pkg)
-        if current_version == rls.version:
-            log.info(f"{package_name} is already up to date ({current_version})")
+    # check relative process
+
+    # install
+    _, extname = os.path.splitext(rls.url)
+    if extname == ".deb":
+        tmp_filepath.rename(f"{tmp_filepath}.deb")
+        t.cmd(f"sudo apt remove -y {name}")
+        t.cmd(f"sudo apt install -y {tmp_filepath}")
+        tmp_filepath.unlink()
+    elif extname == ".AppImage":
+        target_filepath = t.BINPATH / name
+        tmp_filepath.replace(target_filepath)
+        target_filepath.chmod(target_filepath.stat().st_mode | 0o111)
+
+        # create desktop file
+        desktop_filepath = t.BINPATH / (f"../share/applications/{name}.desktop")
+        if desktop_filepath.exists():
+            log.info(f"find desktop file: {desktop_filepath}, skipping creation")
             return
-
-        # download
-        log.info("changelog: " + "\n".join(rls.changelog.splitlines()[:20]))
-        if not t.confirm(f"install {package_name} {current_version} -> {rls.version}"):
-            return
-        tmp_filepath = t.TMPPATH / (f"{package_name}-{rls.version}")
-        t.cmd(f"wget -O '{tmp_filepath}' '{rls.url}'")
-
-        # check relative process
-
-        # install
-        _, extname = os.path.splitext(rls.url)
-        if extname == ".deb":
-            tmp_filepath.rename(f"{tmp_filepath}.deb")
-            t.cmd(f"sudo apt remove -y {package_name}")
-            t.cmd(f"sudo apt install -y {tmp_filepath}")
-            tmp_filepath.unlink()
-        elif extname == ".AppImage":
-            target_filepath = t.BINPATH / package_name
-            tmp_filepath.replace(target_filepath)
-            target_filepath.chmod(target_filepath.stat().st_mode | 0o111)
-
-            # create desktop file
-            desktop_filepath = t.BINPATH / (
-                f"../share/applications/{package_name}.desktop"
-            )
-            if desktop_filepath.exists():
-                log.info(f"find desktop file: {desktop_filepath}, skipping creation")
-                return
-            log.info(f"creating {desktop_filepath}")
-            desktop_filepath.write_text(f"""[Desktop Entry]
+        log.info(f"creating {desktop_filepath}")
+        desktop_filepath.write_text(f"""[Desktop Entry]
 Exec={target_filepath}
-Name={package_name}
+Name={name}
 Comment={input("Comment: ")}
 Type=Application
 Terminal=false
 Icon={input("Icon: ")}
 """)
 
-    @arg("-d")
-    def delete(package_name: str):
+
+@t.cli("my package manager")
+class opts:
+    list: bool = t.arg("-l", help="show packages")
+    install: str = t.arg("-i")
+    delete: str = t.arg("-d")
+
+
+def main():
+    if opts.list:
+        print("\n".join(PACKAGES.keys()))
+        return
+    if opts.install:
+        install_pkg(opts.install)
+        return
+    if opts.delete:
         raise NotImplementedError()
+
+
+main()
