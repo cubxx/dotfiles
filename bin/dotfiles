@@ -8,7 +8,7 @@ REPO = Path.home() / "dotfiles"
 if not REPO.exists() or not (REPO / ".git").exists():
     raise RuntimeError("dotfiles repo not found")
 
-with t.cli(description="my package manager") as arg:
+with t.cli(description="dorfiles manager") as arg:
 
     @arg("-a", help="add $HOME file to dotfiles repo")
     def add(itempath: str):
