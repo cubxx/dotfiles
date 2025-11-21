@@ -1,0 +1,14 @@
+{
+  "ref": {
+    "body": ["/// <reference path='${0}' />"]
+  },
+  "log": {
+    "body": ["console.log(${0})"]
+  },
+  "async": {
+    "body": ["async (${0}) => {}"]
+  },
+  "()": {
+    "body": ["(${0}) => {}"]
+  }
+}

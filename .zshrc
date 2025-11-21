@@ -10,24 +10,26 @@ setopt notify              # report the status of background jobs immediately
 setopt numericglobsort     # sort filenames numerically when it makes sense
 setopt promptsubst         # enable command substitution in prompt
 
-WORDCHARS=${WORDCHARS//\/} # Don't consider certain characters part of the word
-
-# hide EOL sign ('%')
-PROMPT_EOL_MARK=""
-
 # configure key keybindings
-bindkey -e                                        # emacs key bindings
-bindkey ' ' magic-space                           # do history expansion on space
-bindkey '^U' backward-kill-line                   # ctrl + U
-bindkey '^[[3;5~' kill-word                       # ctrl + Supr
-bindkey '^[[3~' delete-char                       # delete
-bindkey '^[[1;5C' forward-word                    # ctrl + ->
-bindkey '^[[1;5D' backward-word                   # ctrl + <-
-bindkey '^[[5~' beginning-of-buffer-or-history    # page up
-bindkey '^[[6~' end-of-buffer-or-history          # page down
-bindkey '^[[H' beginning-of-line                  # home
-bindkey '^[[F' end-of-line                        # end
-bindkey '^[[Z' undo                               # shift + tab undo last action
+bindkey -v # vim key bindings
+
+# cursor style follow vi mode
+function zle-line-init() {
+  echo -ne '\e[6 q'
+}
+function zle-line-finish() {
+  echo -ne '\e[2 q'
+}
+function zle-keymap-select() {
+  if [[ ${KEYMAP} == vicmd ]]; then
+    zle-line-finish
+  elif [[ ${KEYMAP} == main ]]; then
+    zle-line-init
+  fi
+}
+zle -N zle-line-init
+zle -N zle-keymap-select
+zle -N zle-line-finish
 
 # enable completion features
 autoload -Uz compinit
@@ -56,14 +58,9 @@ setopt hist_ignore_space      # ignore commands that start with space
 setopt hist_verify            # show command with history expansion to user before running it
 #setopt share_history         # share command history data
 
-# force zsh to show the complete history
-alias history="history 0"
-
-# configure `time` format
-TIMEFMT=$'\nreal\t%E\nuser\t%U\nsys\t%S\ncpu\t%P'
 
 # make less more friendly for non-text input files, see lesspipe(1)
-#[ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
+[ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
 
 # set variable identifying the chroot you work in (used in the prompt below)
 if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
@@ -97,16 +94,16 @@ configure_prompt() {
     #[ "$EUID" -eq 0 ] && prompt_symbol=💀
     case "$PROMPT_ALTERNATIVE" in
         twoline)
-            PROMPT=$'%F{%(#.blue.green)}┌──${debian_chroot:+($debian_chroot)─}${VIRTUAL_ENV:+($(basename $VIRTUAL_ENV))─}(%B%F{%(#.red.blue)}%n'$prompt_symbol$'%m%b%F{%(#.blue.green)})-[%B%F{reset}%(6~.%-1~/…/%4~.%5~)%b%F{%(#.blue.green)}]\n└─%B%(#.%F{red}#.%F{blue}$)%b%F{reset} '
+            PROMPT=$'%F{%(#.blue.green)}┌──${debian_chroot:+($debian_chroot)─}${VIRTUAL_ENV:+($VIRTUAL_ENV_PROMPT)─}(%B%F{%(#.red.blue)}%n'$prompt_symbol$'%m%b%F{%(#.blue.green)})-[%B%F{reset}%(6~.%-1~/…/%4~.%5~)%b%F{%(#.blue.green)}]\n└─%B%(#.%F{red}#.%F{blue}$)%b%F{reset} '
             # Right-side prompt with exit codes and background processes
             #RPROMPT=$'%(?.. %? %F{red}%B⨯%b%F{reset})%(1j. %j %F{yellow}%B⚙%b%F{reset}.)'
             ;;
         oneline)
-            PROMPT=$'${debian_chroot:+($debian_chroot)}${VIRTUAL_ENV:+($(basename $VIRTUAL_ENV))}%B%F{%(#.red.blue)}%n@%m%b%F{reset}:%B%F{%(#.blue.green)}%~%b%F{reset}%(#.#.$) '
+            PROMPT=$'${debian_chroot:+($debian_chroot)}${VIRTUAL_ENV:+($VIRTUAL_ENV_PROMPT)}%B%F{%(#.red.blue)}%n@%m%b%F{reset}:%B%F{%(#.blue.green)}%~%b%F{reset}%(#.#.$) '
             RPROMPT=
             ;;
         backtrack)
-            PROMPT=$'${debian_chroot:+($debian_chroot)}${VIRTUAL_ENV:+($(basename $VIRTUAL_ENV))}%B%F{red}%n@%m%b%F{reset}:%B%F{blue}%~%b%F{reset}%(#.#.$) '
+            PROMPT=$'${debian_chroot:+($debian_chroot)}${VIRTUAL_ENV:+($VIRTUAL_ENV_PROMPT)}%B%F{red}%n@%m%b%F{reset}:%B%F{blue}%~%b%F{reset}%(#.#.$) '
             RPROMPT=
             ;;
     esac
@@ -240,11 +237,6 @@ if [ -x /usr/bin/dircolors ]; then
     zstyle ':completion:*:*:kill:*:processes' list-colors '=(#b) #([0-9]#)*=0=01;31'
 fi
 
-# some more ls aliases
-alias ll='ls -l'
-alias la='ls -A'
-alias l='ls -CF'
-
 # enable auto-suggestions based on the history
 if [ -f /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]; then
     . /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
@@ -252,31 +244,60 @@ if [ -f /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]; then
     ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=#999'
 fi
 
-# enable command-not-found if installed
+# enable command-not-found
 if [ -f /etc/zsh_command_not_found ]; then
     . /etc/zsh_command_not_found
 fi
 
-# bun completions
+# aliases
+alias history="history 0" # show the complete history
+alias ll='ls -l --human'
+alias la='ls -A'
+alias l='ls -CF'
+alias up='sudo apt update && sudo apt full-upgrade -y && sudo apt autoremove --purge -y && sudo apt autoclean'
+alias c='clear'
+alias update-app-layout='gsettings reset org.gnome.shell app-picker-layout'
+
+# PATH
+BINPATHS=(
+  # golang
+  "/usr/local/go/bin"
+  "$HOME/go/bin"
+  # dotfiles
+  "$HOME/dotfiles/bin"
+)
+
+## bun
+BUN_PATH="$HOME/.bun"
+if [ -d "$BUN_PATH" ]; then
+  BINPATHS+=("$BUN_PATH/bin")
+  # [ -s "$BUN_PATH/_bun" ] && source "$BUN_PATH/_bun"
+fi
 [ -s "/home/xcube/.bun/_bun" ] && source "/home/xcube/.bun/_bun"
 
-# bun
-export BUN_INSTALL="$HOME/.bun"
-export PATH=$PATH:$BUN_INSTALL/bin
-# go
-export PATH=$PATH:/usr/local/go/bin:/home/xcube/go/bin
-# fnm
-FNM_PATH="/home/xcube/.local/share/fnm"
+## fnm
+FNM_PATH="$HOME/.local/share/fnm"
 if [ -d "$FNM_PATH" ]; then
-  export PATH="$FNM_PATH:$PATH"
-  eval "`fnm env`"
+  BINPATHS+=("$FNM_PATH")
+  eval "$("$FNM_PATH/fnm" env)"
 fi
-# lua-language-server
-export PATH=$PATH:$HOME/lua-language-server/bin
-# dotfiles
-export PATH=$PATH:$HOME/dotfiles/bin
 
-# apt update
-alias up='sudo apt update && sudo apt full-upgrade -y && sudo apt autoremove -y'
+for item in "${BINPATHS[@]}"; do
+  export PATH="$PATH:$item"
+done
 
-export EDITOR='vim' # default editor
+# ENV
+TIMEFMT=$'\nreal\t%E\nuser\t%U\nsys\t%S\ncpu\t%P' # configure `time` format
+WORDCHARS=${WORDCHARS//\/} # Do not consider certain characters part of the word
+
+export XDG_CONFIG_HOME=$HOME/.config
+export EDITOR=vim
+export PYTHON_HISTORY=/dev/null # do not save python repl history
+export NODE_REPL_HISTORY=/dev/null # do not save node repl history
+# export SSLKEYLOGFILE=$HOME/tls_keylog # Save browser ssl key file
+
+## nvidia 
+export __NV_PRIME_RENDER_OFFLOAD=1
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+export __VK_LAYER_NV_optimus=NVIDIA_only
+

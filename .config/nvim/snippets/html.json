@@ -1,0 +1,20 @@
+{
+  "doc": {
+    "body": [
+      "<!DOCTYPE html>",
+      "<html>",
+      "\t<head>",
+      "\t\t<meta charset=\"UTF-8\" />",
+      "\t\t<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">",
+      "\t\t<title>${1:Document}</title>",
+      "\t</head>",
+      "\t<body>",
+      "\t\t<script type=\"module\">$0</script>",
+      "\t</body>",
+      "</html>"
+    ]
+  },
+  "<link:css": {
+    "body": ["<link rel=\"stylesheet\" href=\"${0:main.css}\" />"]
+  }
+}

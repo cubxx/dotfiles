@@ -1,129 +1,263 @@
 #!/usr/bin/env python
-import os
 import re
-import webbrowser
-from dataclasses import dataclass
-from typing import Any
+import shutil
+import tempfile
+from abc import ABC, abstractmethod
+from functools import cache
+from pathlib import Path
 
 import mytools as t
 from mytools import log
 
 
-@dataclass
-class Package:
+# package
+class Package(ABC):
+    @property
+    def bin(self):
+        return self.__class__.__name__
+
+    @abstractmethod
+    def latest(self) -> str | None: ...
+    def confirm(self, version: str, changelog: str, download_url: str) -> str | None:
+        if self.version == version:
+            log.info(f"Already up to date: {version}")
+            return
+        log.info("Changelog:\n" + "\n".join(changelog.splitlines()[:20]))
+        if not t.confirm(f"Update: {self.version} -> {version}"):
+            return
+        return download_url
+
+    def download(self, url: str):
+        filename = url.rsplit("/", 1)[-1]
+        temp = tempfile.NamedTemporaryFile(
+            prefix=self.bin,
+            suffix=filename,
+            delete=False,
+        )
+        t.cmd(f"wget -O '{temp.name}' '{url}'")
+        return temp
+
+    @property
+    @cache
+    def version(self) -> str: ...
+    @abstractmethod
+    def install(self, filepath: str): ...  # pyright: ignore[reportPrivateUsage]
+    @abstractmethod
+    def uninstall(self): ...
+
+
+## source
+class GitHub(Package):
     repo: str
     file: str | re.Pattern[str]
-    prerelease: bool = False
+    prerelease = False
+
+    @property
+    @cache
+    def api_url(self):
+        return f"https://api.github.com/repos/{self.repo}/releases"
+
+    def latest(self):
+        data = F.get(
+            self.api_url + ("?per_page=1" if self.prerelease else "/latest")
+        ).json()
+
+        try:
+            data = data[0] if self.prerelease else data
+            for asset in filter(
+                (lambda x: x["name"] == self.file)
+                if isinstance(self.file, str)
+                else (lambda x: self.file.search(x["name"])),  # type: ignore
+                data["assets"],
+            ):
+                return super().confirm(
+                    data["tag_name"].lower().lstrip("v"),
+                    data["body"],
+                    asset["browser_download_url"],
+                )
+        except KeyError as e:
+            raise ValueError(data) from e
+
+        import webbrowser
+
+        webbrowser.open(f"https://github.com/{self.repo}/releases")
+        raise ValueError(f"{self.file} not found")
 
 
-@dataclass
-class Release:
-    version: str
-    changelog: str
-    url: str
+class GitHubProxy(GitHub):
+    proxy_prefix = "https://gh-proxy.com/"
+
+    @property
+    @cache
+    def api_url(self):
+        return self.proxy_prefix + super().api_url
 
 
-PACKAGES = {
-    "v2rayn": Package(
-        "2dust/v2rayN",
-        "v2rayN-linux-64.deb",
-    ),
-    "musicfree": Package(
-        "maotoumao/MusicFreeDesktop",
-        re.compile(r"linux-amd64\.deb$"),
-    ),
-    "lmms": Package(
-        "LMMS/lmms",
-        re.compile(r"linux-x86_64\.AppImage$"),
-        True,
-    ),  # dep: libfuse2t64
-}
-
-
-def fetch_release(pkg: Package):
-    url_prefix = f"https://api.github.com/repos/{pkg.repo}/releases"
-    data: dict[str, Any] = (
-        t.fetch(url_prefix + "?per_page=1")[0]
-        if pkg.prerelease
-        else t.fetch(url_prefix + "/latest")
-    )
-
-    for asset in filter(
-        (lambda x: x["name"] == pkg.file)
-        if isinstance(pkg.file, str)
-        else (lambda x: pkg.file.search(x["name"])),  # type: ignore
-        data["assets"],
-    ):
-        return Release(
-            data["tag_name"].lower().lstrip("v"),
-            data["body"],
-            "https://gh-proxy.com/" + asset["browser_download_url"],
-        )
-
-    webbrowser.open(f"https://github.com/{pkg.repo}/releases")
-    raise ValueError(f"{pkg.file} not found")
-
-
-with t.cli(description="my package manager") as arg:
-
-    @arg("-l", action="store_true", help="show packages")
-    def list(val: object):
-        if val is True:
-            print("\n".join(PACKAGES.keys()))
-
-    @arg("-i")
-    def install(package_name: str):
-        pkg = PACKAGES[package_name]
-        current_version = (
-            t.cmd(
-                f"dpkg -l | grep '^ii  {package_name}' | awk '{{print $3}}'", "capture"
-            )
+## installer
+class APT(Package):
+    @property
+    @cache
+    def version(self):
+        return (
+            t.cmd(f"dpkg -l | grep '^ii  {self.bin}' | awk '{{print $3}}'", "capture")
             .strip()
             .lower()
         )
-        rls = fetch_release(pkg)
-        if current_version == rls.version:
-            log.info(f"{package_name} is already up to date ({current_version})")
+
+    def install(self, filepath: str):
+        t.cmd(f"sudo apt install -y {filepath}")
+
+    def uninstall(self):
+        t.cmd(f"sudo apt remove -y {self.bin}")
+
+
+class BIN(Package):
+    @property
+    @cache
+    def binpath(self):
+        return t.BINPATH / self.bin
+
+    @property
+    @cache
+    def version(self) -> str:
+        return shutil.which(self.bin) or ""
+
+    def install(self, filepath: str):
+        log.info(f"move {filepath} to {self.binpath}")
+        shutil.copyfile(filepath, self.binpath)
+        self.binpath.chmod(self.binpath.stat().st_mode | 0o111)
+
+        # create desktop file
+        desktop_filepath = t.BINPATH.parent / f"share/applications/{self.bin}.desktop"
+        if not t.confirm(f"Create {desktop_filepath}"):
             return
-
-        # download
-        log.info("changelog: " + "\n".join(rls.changelog.splitlines()[:20]))
-        if not t.confirm(f"install {package_name} {current_version} -> {rls.version}"):
+        if desktop_filepath.exists():
+            log.info(f"Find desktop file: {desktop_filepath}, skipping creation")
             return
-        tmp_filepath = t.TMPPATH / (f"{package_name}-{rls.version}")
-        t.cmd(f"wget -O '{tmp_filepath}' '{rls.url}'")
-
-        # check relative process
-
-        # install
-        _, extname = os.path.splitext(rls.url)
-        if extname == ".deb":
-            tmp_filepath.rename(f"{tmp_filepath}.deb")
-            t.cmd(f"sudo apt remove -y {package_name}")
-            t.cmd(f"sudo apt install -y {tmp_filepath}")
-            tmp_filepath.unlink()
-        elif extname == ".AppImage":
-            target_filepath = t.BINPATH / package_name
-            tmp_filepath.replace(target_filepath)
-            target_filepath.chmod(target_filepath.stat().st_mode | 0o111)
-
-            # create desktop file
-            desktop_filepath = t.BINPATH / (
-                f"../share/applications/{package_name}.desktop"
-            )
-            if desktop_filepath.exists():
-                log.info(f"find desktop file: {desktop_filepath}, skipping creation")
-                return
-            log.info(f"creating {desktop_filepath}")
-            desktop_filepath.write_text(f"""[Desktop Entry]
-Exec={target_filepath}
-Name={package_name}
+        desktop_filepath.write_text(f"""[Desktop Entry]
+Exec={self.binpath}
+Name={self.bin}
 Comment={input("Comment: ")}
 Type=Application
 Terminal=false
-Icon={input("Icon: ")}
 """)
 
-    @arg("-d")
-    def delete(package_name: str):
-        raise NotImplementedError()
+    def uninstall(self):
+        self.binpath.unlink()
+
+
+## app
+class v2rayn(GitHubProxy, APT):
+    repo = "2dust/v2rayN"
+    file = "v2rayN-linux-64.deb"
+
+
+class musicfree(GitHubProxy, APT):
+    repo = "maotoumao/MusicFreeDesktop"
+    file = re.compile(r"linux-amd64\.deb$")
+
+
+class lmms(GitHubProxy, BIN):
+    """deps: libfuse2t64"""
+
+    repo = "LMMS/lmms"
+    file = re.compile(r"linux-x86_64\.AppImage$")
+    prerelease = True
+
+    @property
+    @cache
+    def version(self):
+        return (
+            super().version
+            and t.cmd(
+                rf"{self.bin} -v | grep -oP 'LMMS \K\d+\.\d+\.\d+-\w+\.\d+'", "capture"
+            ).strip()
+        )
+
+
+class harper_ls(GitHubProxy, BIN):
+    repo = "Automattic/harper"
+    file = "harper-ls-x86_64-unknown-linux-gnu.tar.gz"
+
+    @property
+    @cache
+    def bin(self):
+        return super().bin.replace("_", "-")
+
+    @property
+    @cache
+    def version(self):
+        return (
+            super().version
+            and t.cmd(f"{self.bin} --version | awk '{{print $2}}'", "capture").strip()
+        )
+
+    def install(self, filepath: str):
+        tmpdir = tempfile.TemporaryDirectory(prefix=self.bin, delete=False)
+        t.cmd(f"tar -xf {filepath} -C {tmpdir.name}")
+        super().install(f"{tmpdir.name}/{self.bin}")
+        tmpdir.cleanup()
+
+
+class zotero(Package):
+    libpath = "/opt/zotero"
+
+    def latest(self):
+        html = F.get("https://www.zotero.org/download/").text
+        match = re.search(r"Zotero (\d)", html)
+        return super().confirm(
+            "unknown" if match is None else match.group(1),
+            "https://www.zotero.org/blog/",
+            "https://www.zotero.org/download/client/dl?channel=release&platform=linux-x86_64",
+        )
+
+    def install(self, filepath: str):
+        libpath = Path(self.libpath)
+        if libpath.exists():
+            self.uninstall()
+        t.cmd(f"sudo mkdir -p {libpath}")
+
+        t.cmd(f'sudo tar -xf "{filepath}" --strip-components=1 -C {libpath}')
+        t.cmd(f"sudo {libpath / 'set_launcher_icon'}")
+        (t.BINPATH.parent / f"share/applications/{self.bin}.desktop").symlink_to(
+            libpath / "zotero.desktop"
+        )
+
+    def uninstall(self):
+        log.info(f"rm {self.libpath}")
+        t.cmd(f"sudo rm -rf {self.libpath}")
+
+
+# global
+PACKAGES = {p.__name__: p for p in (v2rayn, musicfree, lmms, harper_ls, zotero)}
+F = t.Client()
+
+
+@t.cli("my package manager")
+class opts:
+    list: bool = t.arg("-l", help="show packages")
+    install: str = t.arg("-i")
+    uninstall: str = t.arg("-d")
+
+
+def main():
+    if opts.list:
+        print("\n".join(PACKAGES.keys()))
+        return
+    if opts.install:
+        pkg = PACKAGES[opts.install]()
+        url = pkg.latest()
+        if url is not None:
+            tmpfile = pkg.download(url)
+            pkg.install(tmpfile.name)
+            import os
+
+            os.remove(tmpfile.name)
+
+    if opts.uninstall:
+        pkg = PACKAGES[opts.uninstall]()
+        pkg.uninstall()
+
+
+zotero().install("/tmp/zoterowucigo0edl?channel=release&platform=linux-x86_64")
+main()

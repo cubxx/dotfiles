@@ -5,25 +5,33 @@ from pathlib import Path
 import mytools as t
 from mytools import log
 
+
+@t.cli("startup script")  # add default cli args
+class opts:
+    pass
+
+
+if opts.edit:  # type: ignore
+    sys.exit(0)
+
 script_name = Path(__file__).name
 
 # Notify on error
-sys.excepthook = (
-    lambda typ, val, trace: t.cmd(f"""
+original_hook = sys.excepthook
+sys.excepthook = lambda typ, val, trace: (
+    original_hook(typ, val, trace),
+    t.cmd(f"""
 gdbus call --session \
     --dest org.freedesktop.Notifications \
     --object-path /org/freedesktop/Notifications \
     --method org.freedesktop.Notifications.Notify \
-    "Startup" 0 "" "{typ.__name__}: {val}" "Please run '{script_name}' manually" [] "{{'transient': <true>}}" 5000 || true""")
+    "Startup" 0 "" "{typ.__name__}: {val}" "Please run '{script_name}' manually" [] "{{'transient': <true>}}" 5000 || true"""),
 )
 
 # Create autostart desktop file
-target_dirpath = Path.home() / ".config/autostart"
-target_dirpath.mkdir(parents=True, exist_ok=True)
-desktop_filepath = target_dirpath / f"{script_name}.desktop"
-if not desktop_filepath.exists():
-    log.info(f"create {desktop_filepath}")
-    desktop_filepath.write_text(f"""[Desktop Entry]
+desktop_filepath = t.HOME / f".config/autostart/{script_name}.desktop"
+desktop_filepath.parent.mkdir(parents=True, exist_ok=True)
+content = f"""[Desktop Entry]
 Type=Application
 Exec={__file__}
 Hidden=false
@@ -31,13 +39,24 @@ NoDisplay=false
 X-GNOME-Autostart-enabled=true
 Name=Startup
 Comment=My Startup Script
-""")
+"""
+if not desktop_filepath.exists() or desktop_filepath.read_text() != content:
+    log.info(f"create {desktop_filepath}")
+    desktop_filepath.write_text(content)
 
 
 # deamon process
+def kill_port(port: int):
+    log.info(f"kill process on port {port}")
+    t.cmd(f"fuser -k {port}/tcp || true")
+
+
 log.info("Tampermonkey script server")
-port = 3010
-root = Path.home() / "proj/tampermonkey-script/src"
+kill_port(3010)
 t.cmd(
-    f'static-web-server --port {port} --root "{root.absolute()}" --cors-allow-origins "*" &'
+    f'{t.HOME / "proj/crawl/server/target/release/crawl-server"} --addr=0.0.0.0:3010 --root="{t.HOME / "proj/tampermonkey-script/src"}" --daemon &'
 )
+
+log.info("Crawl server")
+kill_port(4050)
+t.cmd(f"cd {t.HOME / 'proj/crawl'} && make run &")

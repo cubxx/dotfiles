@@ -1,5 +1,13 @@
 [user]
-	name = cubxx
-	email = shawn6304@qq.com
-[core]
-	editor = code -w
+  name = cubxx
+  email = shawn6304@qq.com
+[init]
+  defaultBranch = main
+[alias]
+  c = !git add -A && git commit
+  l = log --oneline --graph --all
+  s = show --stat
+[pull]
+  rebase = true
+[rebase]
+  autoSquash = true # only for -i mode
