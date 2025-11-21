@@ -1,5 +1,14 @@
 [user]
-	name = cubxx
-	email = shawn6304@qq.com
-[core]
-	editor = code -w
+  name = cubxx
+  email = shawn6304@qq.com
+[init]
+  defaultBranch = main
+[alias]
+  c = !git add -A && git commit
+  l = log --graph --all --color --date=short --pretty=format:'%C(green)%ad%C(reset) %C(bold blue)%an%C(reset) %C(auto)%h%d%C(reset) %s'
+  s = show --stat
+  gcf = !git reflog expire --expire=now --all && git gc --aggressive --prune=now
+[pull]
+  rebase = true
+[rebase]
+  autoSquash = true # only for -i mode

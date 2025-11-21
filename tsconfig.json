@@ -4,7 +4,7 @@
     "target": "esnext",
     "module": "esnext",
     "moduleDetection": "force",
-    "allowJs": true,
+    "checkJs": true,
 
     // bundler
     "moduleResolution": "bundler",
