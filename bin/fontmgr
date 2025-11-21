@@ -1,0 +1,68 @@
+#!/usr/bin/env python
+import shutil
+from pathlib import Path
+
+import mytools as t
+from mytools import log
+
+SYSFONT_DIRPATH = Path("/usr/share/fonts")
+
+
+def decompress(source: Path, target: Path):
+    log.info(f"decompress to {target}")
+    target.mkdir(parents=True, exist_ok=True)
+    match source.name:
+        case ".zip":
+            t.cmd(f"unzip {source} -d {target}")
+        case (
+            "*.tar"
+            | "*.tar.gz"
+            | "*.tgz"
+            | "*.tar.bz2"
+            | "*.tbz2"
+            | "*.tar.xz"
+            | "*.txz"
+        ):
+            t.cmd(f"tar -xf {source} -C {target}")
+        case _:
+            raise ValueError(f"unsupported file type: {source.name}")
+
+
+with t.cli("system font manager") as arg:
+
+    @arg("-i")
+    def install(url: str):
+        urlpath = Path(url)
+        suffix = "".join(urlpath.suffixes)
+        fontname = urlpath.name.removesuffix(suffix)
+        tmp_filepath = t.TMPPATH / (urlpath.name)
+        target_dirpath = SYSFONT_DIRPATH / fontname
+
+        if not (tmp_filepath.exists() and t.confirm(f"{tmp_filepath} exists, use it?")):
+            t.cmd(f"wget -O '{tmp_filepath}' '{url}'")
+
+        match tmp_filepath.name:
+            case ".ttf" | ".otf":
+                log.info(f"move to {target_dirpath}")
+                tmp_filepath.replace(SYSFONT_DIRPATH / (tmp_filepath.name))
+            case _:
+                decompress(tmp_filepath, target_dirpath)
+
+        t.cmd("fc-cache -f")
+        tmp_filepath.unlink(missing_ok=True)
+
+    @arg("-d")
+    def delete(fontname: str):
+        dirpath = SYSFONT_DIRPATH / fontname
+        isFound = dirpath.is_dir()
+        if isFound:
+            log.info(f"remove {dirpath}")
+            shutil.rmtree(dirpath.absolute())
+        for filepath in SYSFONT_DIRPATH.glob(f"{fontname}.*"):
+            if filepath.is_file():
+                log.info(f"remove {filepath}")
+                filepath.unlink()
+                isFound = True
+
+        if isFound:
+            t.cmd("fc-cache -f")

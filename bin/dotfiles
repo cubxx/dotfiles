@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+from pathlib import Path
+
+import mytools as t
+from mytools import log
+
+REPO = Path.home() / "dotfiles"
+if not REPO.exists() or not (REPO / ".git").exists():
+    raise RuntimeError("dotfiles repo not found")
+
+with t.cli(description="my package manager") as arg:
+
+    @arg("-a", help="add $HOME file to dotfiles repo")
+    def add(itempath: str):
+        source = Path(itempath).expanduser().absolute()
+        if source.is_symlink():
+            log.warning(f"skipped symlink {source} -> {source.readlink()}")
+            return
+        target = REPO / source.relative_to(Path.home())
+        if target.exists():
+            log.warning(f"skipped existing {target}")
+            return
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        Path(source).rename(target)
+        source.symlink_to(target)
+        log.info(f"add symlink {source} -> {target}")
+
+    @arg("-r", help="restore $HOME file from dotfiles repo")
+    def restore(itempath: str):
+        source = Path(itempath).expanduser().absolute()
+        if not source.is_symlink():
+            log.warning(f"skipped non-symlink {source}")
+            return
+        target = source.readlink()
+        if not target.exists():
+            log.error(f"skipped missing target {target}")
+            return
+        source.unlink()
+        target.rename(source)
+        log.info(f"restored {source} <- {target}")
+
+    @arg("-i", help="install dotfiles to $HOME")
+    def install(itempath: str):
+        source = Path(itempath).absolute()
+        target = Path.home() / source.relative_to(REPO)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists() and not t.confirm(f"overwrite existing? ({target})"):
+            return
+        target.symlink_to(source)
+        log.info(f"install symlink {target} -> {source}")

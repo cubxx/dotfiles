@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+import re
+import shutil
+
+import mytools as t
+
+HEADS = {
+    "python": """
+import mytools as t
+from mytools import log
+
+
+""",
+    "bash": """
+set -euo pipefail
+if [[ "${1:-}" == "-e" ]]; then
+  [ -f ~/.selected_editor ] && . ~/.selected_editor
+  "${2:-${EDITOR:-${VISUAL:-$SELECTED_EDITOR}}}" "$0"
+  exit 0
+fi
+#============================#
+""",
+}
+
+
+with t.cli("create my script") as arg:
+
+    @arg("-c")
+    def create(script_name: str):
+        if shutil.which(script_name) is not None:
+            raise ValueError(f"command already exists: {script_name}")
+
+        script_filepath = t.BINPATH / script_name
+        if script_filepath.exists():
+            raise FileExistsError(script_filepath)
+
+        typ = "python" if t.confirm("Create Python script?") else "bash"
+        script_filepath.write_text(f"#!/usr/bin/env {typ}{HEADS[typ]}")
+        script_filepath.chmod(script_filepath.stat().st_mode | 0o111)
+
+        t.cmd(f"{t.editor()} {script_filepath}")
+
+    @arg("-u")
+    def update(script_name: str):
+        script_filepath = t.BINPATH / script_name
+        raw = script_filepath.read_text()
+        matches = re.search(r"^#!/usr/bin/env (\w+)", raw)
+        if matches is None:
+            raise ValueError(f"can not extract shebang from {script_filepath}")
+        typ = matches.group(1)
+        script_filepath.write_text(HEADS[typ] + raw)
+
+        t.cmd(f"{t.editor()} {script_filepath}")
+
+    @arg("-l", action="store_true")
+    def list(val: object):
+        if val is True:
+            t.cmd(f"file {t.BINPATH}/* | grep 'ASCII text executable'")

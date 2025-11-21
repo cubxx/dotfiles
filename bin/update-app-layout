@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "-e" ]]; then
+  [ -f ~/.selected_editor ] && . ~/.selected_editor
+  "${2:-${EDITOR:-${VISUAL:-$SELECTED_EDITOR}}}" "$0"
+  exit 0
+fi
+#============================#
+
+gsettings reset org.gnome.shell app-picker-layout
