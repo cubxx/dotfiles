@@ -8,7 +8,7 @@ from pathlib import Path
 import mytools as t
 from mytools import log
 
-ROOT = Path.home() / ".config/Code/User"
+ROOT = t.HOME / ".config/Code/User"
 GLOBAL_STORE = ROOT / "globalStorage"
 WORKSPACE_STORE = ROOT / "workspaceStorage"
 
@@ -69,7 +69,7 @@ with t.cli("vscode deleter") as arg:
     #     extensions = set[str](
     #         re.findall(
     #             r'"identifier":{"id":"([^"]+)"',
-    #             (Path.home() / ".vscode/extensions/extensions.json").read_text(),
+    #             (t.HOME / ".vscode/extensions/extensions.json").read_text(),
     #         )
     #     )
     #     print("\n".join(extensions))

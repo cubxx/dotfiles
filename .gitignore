@@ -6,9 +6,11 @@ tmp/
 # file system
 .DS_Store
 
+# build
+dist/
+
 # nodejs
 node_modules/
-dist/
 *.tsbuildinfo
 
 # python

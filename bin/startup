@@ -18,7 +18,7 @@ gdbus call --session \
 )
 
 # Create autostart desktop file
-target_dirpath = Path.home() / ".config/autostart"
+target_dirpath = t.HOME / ".config/autostart"
 target_dirpath.mkdir(parents=True, exist_ok=True)
 desktop_filepath = target_dirpath / f"{script_name}.desktop"
 if not desktop_filepath.exists():
@@ -36,8 +36,9 @@ Comment=My Startup Script
 
 # deamon process
 log.info("Tampermonkey script server")
-port = 3010
-root = Path.home() / "proj/tampermonkey-script/src"
 t.cmd(
-    f'static-web-server --port {port} --root "{root.absolute()}" --cors-allow-origins "*" &'
+    f'static-web-server --port 3010 --root "{t.HOME / "proj/tampermonkey-script/src"}" --cors-allow-origins "*" &'
 )
+
+log.info("v2go server")
+t.cmd(f"{t.HOME / 'proj/v2go/v2go'} --port 3020 &")

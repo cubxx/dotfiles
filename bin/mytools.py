@@ -15,7 +15,8 @@ from typing import Any, Callable, Literal, overload
 
 import __main__
 
-BINPATH = Path.home() / ".local/bin"
+HOME = Path.home()
+BINPATH = HOME / ".local/bin"
 TMPPATH = Path(tempfile.gettempdir())
 LEVEL_COLORS = {
     "DEBUG": "\033[96m",
