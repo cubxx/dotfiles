@@ -276,7 +276,11 @@ export PATH=$PATH:$HOME/lua-language-server/bin
 # dotfiles
 export PATH=$PATH:$HOME/dotfiles/bin
 
-# apt update
 alias up='sudo apt update && sudo apt full-upgrade -y && sudo apt autoremove -y'
+alias c='clear'
 
 export EDITOR='vim' # default editor
+export __NV_PRIME_RENDER_OFFLOAD=1
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+export __VK_LAYER_NV_optimus=NVIDIA_only
+export QT_QPA_PLATFORM=xcb

@@ -2,12 +2,14 @@ tmp/
 
 # config
 *.env
+*.log
 
 # file system
 .DS_Store
 
 # build
 dist/
+target/
 
 # nodejs
 node_modules/
