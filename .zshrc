@@ -278,6 +278,7 @@ export PATH=$PATH:$HOME/dotfiles/bin
 
 alias up='sudo apt update && sudo apt full-upgrade -y && sudo apt autoremove -y'
 alias c='clear'
+alias update-app-layout='gsettings reset org.gnome.shell app-picker-layout'
 
 export EDITOR='vim' # default editor
 export __NV_PRIME_RENDER_OFFLOAD=1
