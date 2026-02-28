@@ -64,6 +64,7 @@ on('FileType', {
 ---@type table<string,(fun(e:vim.api.keyset.create_autocmd.callback_args,node:TSNode):nil)[]>
 local AUTO_REFACTORS = {
   javascript = {
+    -- `${}`
     function(e, node)
       if vim.v.char ~= '{' then
         return
@@ -85,10 +86,26 @@ local AUTO_REFACTORS = {
         return
       end
 
-      vim.schedule(function()
+      vim.schedule(function() -- FIXME:: input ${ in multi-line template string
         local sr, sc, er, ec = parent:range()
         vim.api.nvim_buf_set_text(e.buf, sr, sc, sr, sc + 1, { '`' })
         vim.api.nvim_buf_set_text(e.buf, er, ec + 1, er, ec + 2, { '`' })
+      end)
+    end,
+    -- /** */
+    function(e, node)
+      if vim.v.char ~= '*' then
+        return
+      end
+
+      local type = node:type()
+      if type ~= 'comment' then
+        return
+      end
+
+      vim.schedule(function()
+        local sr, sc, er, ec = node:range()
+        vim.api.nvim_buf_set_text(e.buf, sr, sc + 3, sr, sc + 3, { ' */' })
       end)
     end,
   },
@@ -178,9 +195,13 @@ local function handle_code_action(action, buf, timeout_ms, attempts)
 end
 local function handle_code_actions(kinds, buf, timeout_ms)
   local params = vim.lsp.util.make_range_params(0, 'utf-8')
-  params.context = { diagnostics = {} }
+  params.context = { diagnostics = {}, only = kinds }
 
-  local results = vim.lsp.buf_request_sync(buf, 'textDocument/codeAction', params, timeout_ms)
+  local results, err = vim.lsp.buf_request_sync(buf, 'textDocument/codeAction', params, timeout_ms)
+  if err then
+    vim.notify('Source code action error: ' .. err, vim.log.levels.ERROR)
+    return
+  end
   if not results then
     return
   end
@@ -202,6 +223,7 @@ on('BufWritePre', {
     if kinds ~= nil then
       handle_code_actions(kinds, e.buf, 100)
     end
+    vim.cmd('undojoin') -- merge undo node: code action + format
     require('conform').format({ bufnr = e.buf, lsp_format = 'fallback' })
   end,
 })

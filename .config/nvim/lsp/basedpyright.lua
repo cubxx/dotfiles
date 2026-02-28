@@ -24,6 +24,13 @@ return {
       analysis = {
         autoImportCompletions = true,
         autoSearchPaths = true,
+        -- lint
+        diagnosticSeverityOverrides = {
+          reportAny = false,
+          reportExplicitAny = false,
+          reportUnannotatedClassAttribute = false,
+          reportImplicitRelativeImport = 'warning',
+        },
         -- only for basedpyright
         inlayHints = {
           callArgumentNames = false,

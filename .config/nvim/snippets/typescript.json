@@ -1,14 +1,14 @@
 {
   "ref": {
-    "body": ["/// <reference path='${0}' />"]
+    "body": ["/// <reference types='${0}' />"]
   },
   "log": {
     "body": ["console.log(${0})"]
   },
   "async": {
-    "body": ["async (${0}) => {}"]
+    "body": ["async () => {${0}}"]
   },
-  "()": {
-    "body": ["(${0}) => {}"]
+  "for": {
+    "body": ["for (const e of ${0}) {", "\t", "}"]
   }
 }

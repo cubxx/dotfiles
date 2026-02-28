@@ -16,4 +16,5 @@ return {
     on_dir(project_root)
   end,
   -- https://github.com/yioneko/vtsls/blob/main/packages/service/configuration.schema.json
+  settings = {},
 }

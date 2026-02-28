@@ -23,6 +23,9 @@ return {
           background = false,
         },
       },
+      custom_highlights = {
+        LineNr = { fg = '#808080' },
+      },
     })
     vim.cmd.colorscheme('catppuccin')
   end,

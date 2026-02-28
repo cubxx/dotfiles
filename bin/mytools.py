@@ -124,12 +124,12 @@ class cli:
         else:
             config.setdefault("type", typ)
 
-        if not (
-            len(name_or_flags) > 0 and name_or_flags[0].startswith("-")
-        ):  # postional
-            config.setdefault("dest", name)
+        if len(name_or_flags) > 0 and name_or_flags[0].startswith("-"):
+            name_or_flags = (f"--{name}", *name_or_flags)  # named
+        else:
+            config.setdefault("dest", name)  # postional
 
-        _ = self.parser.add_argument(f"--{name}", *name_or_flags, **config)
+        _ = self.parser.add_argument(*name_or_flags, **config)
 
     def add_arguments(self, cls: type):
         for name, typ in cls.__annotations__.items():

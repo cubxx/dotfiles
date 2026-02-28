@@ -36,29 +36,6 @@ map('n', 'grh', function()
   local opts = { bufnr = 0 }
   vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled(opts), opts)
 end, { desc = 'Toggle inlay hint' })
-map('n', 'grs', function()
-  local clients = vim.lsp.get_clients({ bufnr = 0 })
-  if #clients == 0 then
-    vim.notify('No LSP client attached', vim.log.levels.INFO)
-    return
-  end
-
-  ---@type  string[]
-  local names = {}
-  for i, client in ipairs(clients) do
-    names[i] = client.name
-  end
-
-  vim.ui.select({ 'ALL', table.unpack(names) }, { prompt = 'Restart LSP clients:' }, function(choice)
-    if choice == nil then
-      return
-    end
-
-    local targets = choice == 'ALL' and names or choice
-    vim.lsp.enable(targets, false)
-    vim.lsp.enable(targets, true)
-  end)
-end, { desc = 'Restart LSP' })
 
 -- diagnostic
 map('n', '[d', function()
@@ -86,7 +63,7 @@ map('n', '<leader>qq', '<cmd>qa<cr>', { desc = 'Quit All' })
 map('n', '<leader>w', '<C-w>', { desc = 'Window CMD', remap = true })
 
 -- terminal
-map('n', '<leader>t', function()
+map('n', '<leader>tt', function()
   local term_buf = vim.fn.bufnr('^term://')
   local should_create_term = term_buf == -1
   if should_create_term then
@@ -107,6 +84,11 @@ map('n', '<leader>t', function()
     end
   end
 end, { desc = 'Toggle terminal' })
+map('n', '<leader>tn', function()
+  local term_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_win_set_buf(0, term_buf)
+  vim.fn.jobstart(vim.o.shell, { term = true })
+end, { desc = 'New terminal' })
 
 -- sys copy & paste
 map('v', '<leader>y', '"+y', { desc = 'Copy' })

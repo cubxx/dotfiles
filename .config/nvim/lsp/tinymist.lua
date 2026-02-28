@@ -5,6 +5,7 @@ return {
   root_markers = { '.git' },
   -- https://myriad-dreamin.github.io/tinymist/config/neovim.html
   settings = {
+    formatterMode = 'typstyle',
     lint = {
       enabled = true,
     },

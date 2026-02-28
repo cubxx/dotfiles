@@ -65,30 +65,27 @@ end
 
 --- enable config
 ---@type  string[]
-local manual_lsp = {}
+local lsp_names = {}
 for filename, _ in vim.fs.dir(vim.fn.stdpath('config') .. '/lsp', { depth = 1 }) do
   local name = vim.fn.fnamemodify(filename, ':t:r')
-  local config = vim.lsp.config[name]
-  if config.manual then
-    table.insert(manual_lsp, name)
-  else
+
+  table.insert(lsp_names, name)
+  if not vim.lsp.config[name].manual then
     vim.lsp.enable(name)
   end
 end
-if #manual_lsp > 0 then
-  vim.keymap.set('n', 'grl', function()
-    vim.ui.select(manual_lsp, { prompt = 'Toggle LSP clients:' }, function(choice)
-      if choice == nil then
-        return
-      end
-      local enable = not vim.lsp.is_enabled(choice)
-      vim.lsp.enable(choice, enable)
-      vim.schedule(function()
-        vim.notify(choice .. (enable and ' enabled' or ' disabled'), vim.log.levels.INFO)
-      end)
+vim.keymap.set('n', 'grl', function()
+  vim.ui.select(lsp_names, { prompt = 'Toggle LSP clients:' }, function(choice)
+    if choice == nil then
+      return
+    end
+    local enable = not vim.lsp.is_enabled(choice)
+    vim.lsp.enable(choice, enable)
+    vim.schedule(function()
+      vim.notify(choice .. (enable and ' enabled' or ' disabled'), vim.log.levels.INFO)
     end)
-  end, { desc = 'Toggle LSP' })
-end
+  end)
+end, { desc = 'Toggle LSP' })
 
 --- config
 vim.lsp.inlay_hint.enable()

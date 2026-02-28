@@ -11,7 +11,7 @@ class opts:
     pass
 
 
-if opts.edit:  # type: ignore
+if getattr(opts, "edit"):
     sys.exit(0)
 
 script_name = Path(__file__).name
@@ -42,7 +42,7 @@ Comment=My Startup Script
 """
 if not desktop_filepath.exists() or desktop_filepath.read_text() != content:
     log.info(f"create {desktop_filepath}")
-    desktop_filepath.write_text(content)
+    _ = desktop_filepath.write_text(content)
 
 
 # deamon process
@@ -51,12 +51,6 @@ def kill_port(port: int):
     t.cmd(f"fuser -k {port}/tcp || true")
 
 
-log.info("Tampermonkey script server")
-kill_port(3010)
-t.cmd(
-    f'{t.HOME / "proj/crawl/server/target/release/crawl-server"} --addr=0.0.0.0:3010 --root="{t.HOME / "proj/tampermonkey-script/src"}" --daemon &'
-)
-
 log.info("Crawl server")
 kill_port(4050)
-t.cmd(f"cd {t.HOME / 'proj/crawl'} && make run &")
+t.cmd(f"PORT=4050 bun --cwd={t.HOME / 'proj/crawl'} start:server &")

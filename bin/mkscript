@@ -25,7 +25,7 @@ fi
 
 @t.cli("create my script")
 class opts:
-    create: str
+    create: str = t.arg()
 
 
 def main():
@@ -39,7 +39,7 @@ def main():
             raise FileExistsError(script_filepath)
 
         typ = "python" if t.confirm("Create Python script?") else "bash"
-        script_filepath.write_text(f"#!/usr/bin/env {typ}{HEADS[typ]}")
+        _ = script_filepath.write_text(f"#!/usr/bin/env {typ}{HEADS[typ]}")
         script_filepath.chmod(script_filepath.stat().st_mode | 0o111)
 
         t.cmd(f"{t.editor()} {script_filepath}")

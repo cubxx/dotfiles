@@ -7,6 +7,7 @@
   c = !git add -A && git commit
   l = log --oneline --graph --all
   s = show --stat
+  gcf = !git reflog expire --expire=now --all && git gc --aggressive --prune=now
 [pull]
   rebase = true
 [rebase]
