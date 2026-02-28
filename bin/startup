@@ -54,3 +54,7 @@ def kill_port(port: int):
 log.info("Crawl server")
 kill_port(4050)
 t.cmd(f"PORT=4050 bun --cwd={t.HOME / 'proj/crawl'} start:server &")
+
+log.info("Anki server")
+kill_port(2233)
+t.cmd(f"PORT=2233 bun --cwd={t.HOME / 'proj/hippocampus'} start:server &")

@@ -36,6 +36,9 @@ map('n', 'grh', function()
   local opts = { bufnr = 0 }
   vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled(opts), opts)
 end, { desc = 'Toggle inlay hint' })
+map('n', 'grs', function()
+  vim.lsp.buf.code_action({ context = { diagnostics = {}, only = { 'source' } } })
+end, { desc = 'Open source.* select' })
 
 -- diagnostic
 map('n', '[d', function()
@@ -91,5 +94,5 @@ map('n', '<leader>tn', function()
 end, { desc = 'New terminal' })
 
 -- sys copy & paste
-map('v', '<leader>y', '"+y', { desc = 'Copy' })
-map('v', '<leader>p', '"+p', { desc = 'Paste' })
+map('v', '<leader>y', '"+y', { remap = false, desc = 'Copy' })
+map({ 'n', 'v' }, '<leader>p', '"+p', { remap = false, desc = 'Paste' })
