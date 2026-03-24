@@ -1,3 +1,4 @@
+---@type vim.lsp.Config
 return {
   init_options = { hostInfo = 'neovim' },
   cmd = { 'vtsls', '--stdio' },
@@ -46,4 +47,7 @@ return {
       },
     },
   },
+  on_attach = function()
+    vim.lsp.inlay_hint.enable(false)
+  end,
 }

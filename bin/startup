@@ -1,48 +1,92 @@
 #!/usr/bin/env python
-import sys
+import os
+import signal
+import subprocess
 from pathlib import Path
 
 import mytools as t
 from mytools import log
 
-
-@t.cli("startup script")  # add default cli args
-class opts: ...
-
-
-if getattr(opts, "edit"):
-    sys.exit(0)
-
-script_name = Path(__file__).name
+CONFIG_FILEPATH = t.HOME / (".config/systemd/user/startup.service")
+BUN_BINPATH = t.HOME / ".bun/bin"
 
 
-# Create autostart desktop file
-desktop_filepath = t.HOME / f".config/autostart/{script_name}.desktop"
-desktop_filepath.parent.mkdir(parents=True, exist_ok=True)
-content = f"""[Desktop Entry]
-Type=Application
-Exec={__file__}
-Hidden=false
-NoDisplay=false
-X-GNOME-Autostart-enabled=true
-Name=Startup
-Comment=My Startup Script
-"""
-if not desktop_filepath.exists() or desktop_filepath.read_text() != content:
-    log.info(f"create {desktop_filepath}")
-    _ = desktop_filepath.write_text(content)
+class SubProcessManager:
+    process: list[subprocess.Popen[bytes]] = []
+
+    def cleanup(self, s=None, f=None):
+        log.info("cleanup")
+        for p in self.process:
+            p.terminate()
+
+    def run(self):
+        _ = signal.signal(signal.SIGINT, self.cleanup)
+        _ = signal.signal(signal.SIGTERM, self.cleanup)
+
+        for p in self.process:
+            _ = p.wait()
 
 
-# deamon process
-def kill_port(port: int):
-    log.info(f"kill process on port {port}")
+def bun_server(port: int, cwd: Path):
+    if not BUN_BINPATH.exists():
+        log.error(f"not found: {BUN_BINPATH}")
+        return
+    log.info(f"{port} on {cwd}")
+
     t.cmd(f"fuser -k {port}/tcp || true")
+    return subprocess.Popen(
+        ("bun", "start:server"),
+        cwd=cwd,
+        env={
+            "PATH": os.environ["PATH"] + os.pathsep + str(BUN_BINPATH),
+            "PORT": str(port),
+            "NODE_ENV": "production",
+            "HTTP_PROXY": "http://127.0.0.1:10808",
+        },
+        process_group=0,
+    )
 
 
-log.info("Crawl server")
-kill_port(4050)
-t.cmd(f"PORT=4050 bun --cwd={t.HOME / 'proj/crawl'} start:server &")
+@t.cli("startup script")
+class opts:
+    create: bool = t.arg("-c", help="create systemd config")
+    delete: bool = t.arg("-d", help="delete systemd config")
 
-log.info("Anki server")
-kill_port(2233)
-t.cmd(f"PORT=2233 bun --cwd={t.HOME / 'proj/hippocampus'} start:server &")
+
+def main():
+    if getattr(opts, "edit"):
+        return
+    if opts.delete:
+        log.info(f"delete {CONFIG_FILEPATH}")
+        CONFIG_FILEPATH.unlink(missing_ok=True)
+        return
+    if opts.create:
+        CONFIG_FILEPATH.parent.mkdir(parents=True, exist_ok=True)
+        content = f"""[Unit]
+Description=My Startup Script
+
+[Service]
+ExecStart={__file__}
+
+[Install]
+WantedBy=default.target
+"""
+        if not CONFIG_FILEPATH.exists() or CONFIG_FILEPATH.read_text() != content:
+            log.info(f"create {CONFIG_FILEPATH}")
+            _ = CONFIG_FILEPATH.write_text(content)
+            t.cmd("""systemctl --user daemon-reload
+systemctl --user enable startup
+systemctl --user start startup""")
+        return
+
+    pm = SubProcessManager()
+    for p in (
+        bun_server(4050, t.HOME / "proj/crawl"),
+        bun_server(2233, t.HOME / "proj/hippocampus"),
+    ):
+        if p is not None:
+            pm.process.append(p)
+    pm.run()
+
+
+main()

@@ -221,13 +221,14 @@ class zotero(Package):
 
         t.cmd(f'sudo tar -xf "{filepath}" --strip-components=1 -C {libpath}')
         t.cmd(f"sudo {libpath / 'set_launcher_icon'}")
-        (t.BINPATH.parent / f"share/applications/{self.bin}.desktop").symlink_to(
-            libpath / "zotero.desktop"
-        )
+
+        desktop_filepath = t.BINPATH.parent / f"share/applications/{self.bin}.desktop"
+        desktop_filepath.unlink(missing_ok=True)
+        desktop_filepath.symlink_to(libpath / "zotero.desktop")
 
     @override
     def uninstall(self):
-        log.info(f"rm {self.libpath}")
+        log.info(f"remove {self.libpath}")
         t.cmd(f"sudo rm -rf {self.libpath}")
 
 

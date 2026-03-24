@@ -67,16 +67,10 @@ if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
     debian_chroot=$(cat /etc/debian_chroot)
 fi
 
-# set a fancy prompt (non-color, unless we know we "want" color)
+# color support for prompt
 case "$TERM" in
     xterm-color|*-256color) color_prompt=yes;;
 esac
-
-# uncomment for a colored prompt, if the terminal has the capability; turned
-# off by default to not distract the user: the focus in a terminal window
-# should be on the output of commands, not on the prompt
-force_color_prompt=yes
-
 if [ -n "$force_color_prompt" ]; then
     if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
         # We have color support; assume it's compliant with Ecma-48
@@ -88,37 +82,11 @@ if [ -n "$force_color_prompt" ]; then
     fi
 fi
 
-configure_prompt() {
-    case "$PROMPT_ALTERNATIVE" in
-        twoline)
-            PROMPT=$'%F{%(#.blue.green)}┌──${debian_chroot:+($debian_chroot)─}${VIRTUAL_ENV:+($VIRTUAL_ENV_PROMPT)─}(%B%F{%(#.red.blue)}%n@%m%b%F{%(#.blue.green)})-[%B%F{reset}%(6~.%-1~/…/%4~.%5~)%b%F{%(#.blue.green)}]\n└─%B%(#.%F{red}#.%F{blue}$)%b%F{reset} '
-            # Right-side prompt with exit codes and background processes
-            #RPROMPT=$'%(?.. %? %F{red}%B⨯%b%F{reset})%(1j. %j %F{yellow}%B⚙%b%F{reset}.)'
-            ;;
-        oneline)
-            PROMPT=$'${debian_chroot:+($debian_chroot)}${VIRTUAL_ENV:+($VIRTUAL_ENV_PROMPT)}%B%F{%(#.red.blue)}%n@%m%b%F{reset}:%B%F{%(#.blue.green)}%~%b%F{reset}%(#.#.$) '
-            RPROMPT=
-            ;;
-        backtrack)
-            PROMPT=$'${debian_chroot:+($debian_chroot)}${VIRTUAL_ENV:+($VIRTUAL_ENV_PROMPT)}%B%F{red}%n@%m%b%F{reset}:%B%F{blue}%~%b%F{reset}%(#.#.$) '
-            RPROMPT=
-            ;;
-    esac
-    unset prompt_symbol
-}
-
-# The following block is surrounded by two delimiters.
-# These delimiters must not be modified. Thanks.
-# START KALI CONFIG VARIABLES
-PROMPT_ALTERNATIVE=twoline
-NEWLINE_BEFORE_PROMPT=yes
-# STOP KALI CONFIG VARIABLES
-
 if [ "$color_prompt" = yes ]; then
     # override default virtualenv indicator in prompt
     VIRTUAL_ENV_DISABLE_PROMPT=1
 
-    configure_prompt
+    PROMPT=$'%F{green}${debian_chroot:+($debian_chroot)}${VIRTUAL_ENV:+($VIRTUAL_ENV_PROMPT) }%B%F{blue}%~%b%F{reset}\n%B%(#.%F{red}#.%F{green}$)%b%F{reset} '
 
     # enable syntax-highlighting
     if [ -f /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]; then
@@ -167,43 +135,31 @@ if [ "$color_prompt" = yes ]; then
         ZSH_HIGHLIGHT_STYLES[cursor-matchingbracket]=standout
     fi
 else
-    PROMPT='${debian_chroot:+($debian_chroot)}%n@%m:%~%(#.#.$) '
+    PROMPT='${debian_chroot:+($debian_chroot)}:%~%(#.#.$) '
 fi
-unset color_prompt force_color_prompt
+unset color_prompt
 
-toggle_oneline_prompt(){
-    if [ "$PROMPT_ALTERNATIVE" = oneline ]; then
-        PROMPT_ALTERNATIVE=twoline
-    else
-        PROMPT_ALTERNATIVE=oneline
-    fi
-    configure_prompt
-    zle reset-prompt
-}
-zle -N toggle_oneline_prompt
-bindkey ^P toggle_oneline_prompt
 
-# If this is an xterm set the title to user@host:dir
+# If this is an xterm set the title
 case "$TERM" in
 xterm*|rxvt*|Eterm|aterm|kterm|gnome*|alacritty)
-    TERM_TITLE=$'\e]0;${debian_chroot:+($debian_chroot)}${VIRTUAL_ENV:+($(basename $VIRTUAL_ENV))}%n@%m: %~\a'
+    TERM_TITLE=$'\e]0;${debian_chroot:+($debian_chroot)}${VIRTUAL_ENV:+($(basename $VIRTUAL_ENV))} %~\a'
     ;;
 *)
     ;;
 esac
 
+unsetopt PROMPT_SP
 precmd() {
     # Print the previously configured title
     print -Pnr -- "$TERM_TITLE"
 
     # Print a new line before the prompt, but only if it is not the first line
-    if [ "$NEWLINE_BEFORE_PROMPT" = yes ]; then
-        if [ -z "$_NEW_LINE_BEFORE_PROMPT" ]; then
-            _NEW_LINE_BEFORE_PROMPT=1
-        else
-            print ""
-        fi
-    fi
+      if [ -z "$_NEW_LINE_BEFORE_PROMPT" ]; then
+          _NEW_LINE_BEFORE_PROMPT=1
+      else
+          print ""
+      fi
 }
 
 # enable color support of ls, less and man, and also add handy aliases
@@ -268,9 +224,8 @@ BINPATHS=(
 BUN_PATH="$HOME/.bun"
 if [ -d "$BUN_PATH" ]; then
   BINPATHS+=("$BUN_PATH/bin")
-  # [ -s "$BUN_PATH/_bun" ] && source "$BUN_PATH/_bun"
 fi
-[ -s "/home/xcube/.bun/_bun" ] && source "/home/xcube/.bun/_bun"
+[ -s "$BUN_PATH/_bun" ] && source "$BUN_PATH/_bun"
 
 ## fnm
 FNM_PATH="$HOME/.local/share/fnm"
@@ -289,7 +244,7 @@ WORDCHARS=${WORDCHARS//\/} # Do not consider certain characters part of the word
 
 export XDG_CONFIG_HOME=$HOME/.config
 export EDITOR=vim
-# export SSLKEYLOGFILE=$HOME/tls_keylog # Save browser ssl key file
+export SSLKEYLOGFILE=$HOME/tls_keylog # Save ssl key file
 
 ## nvidia 
 export __NV_PRIME_RENDER_OFFLOAD=1

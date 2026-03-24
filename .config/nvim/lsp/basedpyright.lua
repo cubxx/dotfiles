@@ -29,6 +29,10 @@ return {
           reportAny = false,
           reportExplicitAny = false,
           reportUnannotatedClassAttribute = false,
+          reportMissingParameterType = false,
+          reportUnknownParameterType = false,
+          reportUnknownArgumentType = false,
+          reportUnknownMemberType = false,
           reportImplicitRelativeImport = 'warning',
         },
         -- only for basedpyright
@@ -57,13 +61,16 @@ return {
       end
       vim.api.nvim_create_autocmd('TermOpen', {
         pattern = 'term://*',
-        callback = function()
-          vim.notify('activate venv')
-          vim.schedule(function()
-            vim.api.nvim_buf_call(0, function()
-              vim.fn.feedkeys('source ' .. activate_filepath .. '\n', 'n')
+        callback = function(e)
+          local job_id = vim.b[e.buf].terminal_job_id
+          if job_id then
+            vim.notify('activate venv')
+            vim.schedule(function()
+              vim.api.nvim_chan_send(job_id, 'source ' .. activate_filepath .. '\n')
             end)
-          end)
+          else
+            vim.notify('Failed to get terminal job id', vim.log.levels.ERROR)
+          end
         end,
       })
     end

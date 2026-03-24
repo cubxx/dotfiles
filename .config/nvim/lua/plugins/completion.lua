@@ -1,3 +1,4 @@
+-- https://cmp.saghen.dev/configuration
 return {
   {
     'saghen/blink.cmp',
@@ -15,6 +16,7 @@ return {
           ['<PageDown>'] = { 'scroll_documentation_down', 'fallback' },
         },
         completion = {
+          accept = { auto_brackets = { enabled = false } },
           documentation = { auto_show = true },
           list = { selection = { auto_insert = false } },
           menu = { draw = { treesitter = { 'lsp' } } },
